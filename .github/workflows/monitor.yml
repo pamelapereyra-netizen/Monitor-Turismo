@@ -2,8 +2,8 @@ name: Monitor Turismo Semanal
 
 on:
   schedule:
-    - cron: '0 11 * * 1'  # Cada lunes 8am Chile
-  workflow_dispatch:        # Permite ejecutar manualmente
+    - cron: '0 11 * * 1'
+  workflow_dispatch:
 
 jobs:
   ejecutar:
@@ -17,11 +17,11 @@ jobs:
           python-version: '3.11'
 
       - name: Instalar dependencias
-        run: pip install anthropic feedparser python-docx
+        run: python -m pip install --upgrade pip openai feedparser python-docx
 
       - name: Ejecutar monitor
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: python monitor_turismo.py
 
       - name: Subir archivo Word
