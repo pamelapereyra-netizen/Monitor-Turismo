@@ -2,14 +2,12 @@ import os
 import feedparser
 import anthropic
 from datetime import datetime, timedelta
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+from docx import Document
+from docx.shared import Pt, RGBColor
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 
-# ── Fuentes RSS de turismo mundial ──────────────────────────────────────
 FUENTES_RSS = [
     "https://www.unwto.org/feed",
-    "https://wttc.org/feed",
     "https://skift.com/feed/",
     "https://www.hosteltur.com/rss",
     "https://www.traveldailymedia.com/feed/",
@@ -18,14 +16,11 @@ FUENTES_RSS = [
 ]
 
 def recolectar_noticias():
-    """Recolecta noticias de los últimos 7 días desde los RSS."""
     noticias = []
-    hace_7_dias = datetime.now() - timedelta(days=7)
-
     for url in FUENTES_RSS:
         try:
             feed = feedparser.parse(url)
-            for entry in feed.entries[:10]:  # máx 10 por fuente
+            for entry in feed.entries[:10]:
                 noticias.append({
                     "titulo": entry.get("title", ""),
                     "resumen": entry.get("summary", "")[:500],
@@ -34,11 +29,9 @@ def recolectar_noticias():
                 })
         except Exception as e:
             print(f"Error en {url}: {e}")
-
     return noticias
 
 def generar_resumen(noticias):
-    """Usa Claude para generar el resumen ejecutivo."""
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 
     noticias_texto = "\n\n".join([
@@ -54,42 +47,79 @@ A continuación tienes las principales noticias de turismo mundial de la última
 
 Elabora un RESUMEN EJECUTIVO SEMANAL con el siguiente formato:
 
-1. **Titulares de la semana** (3-5 noticias más relevantes globalmente)
-2. **Tendencias emergentes** (patrones o temas recurrentes)
-3. **Relevancia para Chile** (qué implica esto para el turismo chileno o latinoamericano)
-4. **Para tener en radar** (1-2 temas a seguir la próxima semana)
+1. TITULARES DE LA SEMANA
+(3-5 noticias más relevantes globalmente, cada una con un párrafo breve)
 
-El tono debe ser profesional, conciso y orientado a la toma de decisiones. Máximo 600 palabras."""
+2. TENDENCIAS EMERGENTES
+(patrones o temas recurrentes esta semana)
+
+3. RELEVANCIA PARA CHILE
+(qué implica esto para el turismo chileno o latinoamericano)
+
+4. PARA TENER EN RADAR
+(1-2 temas a seguir la próxima semana)
+
+El tono debe ser profesional, conciso y orientado a la toma de decisiones. Máximo 700 palabras."""
 
     message = client.messages.create(
         model="claude-sonnet-4-20250514",
-        max_tokens=1000,
+        max_tokens=1500,
         messages=[{"role": "user", "content": prompt}]
     )
-
     return message.content[0].text
 
-def enviar_email(resumen):
-    """Envía el resumen por correo electrónico."""
-    remitente = os.environ["EMAIL_REMITENTE"]
-    destinatario = os.environ["EMAIL_DESTINATARIO"]
-    password = os.environ["EMAIL_PASSWORD"]
+def crear_word(resumen):
+    doc = Document()
 
-    fecha = datetime.now().strftime("%d/%m/%Y")
+    # Título principal
+    titulo = doc.add_heading("MONITOR DE TURISMO MUNDIAL", 0)
+    titulo.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = f"📊 Monitor Turismo Mundial — Semana del {fecha}"
-    msg["From"] = remitente
-    msg["To"] = destinatario
+    # Subtítulo con fecha
+    fecha = datetime.now().strftime("%d de %B de %Y")
+    subtitulo = doc.add_heading(f"Resumen Ejecutivo Semanal — {fecha}", 2)
+    subtitulo.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
-    cuerpo = MIMEText(resumen, "plain", "utf-8")
-    msg.attach(cuerpo)
+    doc.add_paragraph("")  # espacio
 
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-        server.login(remitente, password)
-        server.sendmail(remitente, destinatario, msg.as_string())
+    # Línea divisoria
+    doc.add_paragraph("─" * 60)
 
-    print(f"✅ Resumen enviado a {destinatario}")
+    # Fuente
+    fuente = doc.add_paragraph()
+    fuente.add_run("Elaborado por: ").bold = True
+    fuente.add_run("Unidad de Estudios, Subsecretaría de Turismo de Chile")
+
+    fuente2 = doc.add_paragraph()
+    fuente2.add_run("Fuentes: ").bold = True
+    fuente2.add_run("UNWTO, Skift, Hosteltur, PhocusWire, Travel Daily Media, TTN Worldwide")
+
+    doc.add_paragraph("─" * 60)
+    doc.add_paragraph("")
+
+    # Contenido del resumen
+    for linea in resumen.split("\n"):
+        linea = linea.strip()
+        if not linea:
+            doc.add_paragraph("")
+            continue
+        # Detectar secciones numeradas como títulos
+        if linea and linea[0].isdigit() and "." in linea[:3]:
+            doc.add_heading(linea, level=2)
+        else:
+            doc.add_paragraph(linea)
+
+    # Pie de página
+    doc.add_paragraph("")
+    doc.add_paragraph("─" * 60)
+    pie = doc.add_paragraph()
+    pie.add_run("Documento generado automáticamente. ").italic = True
+    pie.add_run(f"Semana del {datetime.now().strftime('%d/%m/%Y')}").italic = True
+
+    nombre = f"Monitor_Turismo_{datetime.now().strftime('%Y_%m_%d')}.docx"
+    doc.save(nombre)
+    print(f"✅ Archivo Word generado: {nombre}")
+    return nombre
 
 if __name__ == "__main__":
     print("🔍 Recolectando noticias...")
@@ -99,5 +129,6 @@ if __name__ == "__main__":
     print("🤖 Generando resumen con Claude...")
     resumen = generar_resumen(noticias)
 
-    print("📧 Enviando email...")
-    enviar_email(resumen)
+    print("📄 Creando archivo Word...")
+    crear_word(resumen)
+    
