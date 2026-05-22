@@ -1,0 +1,28 @@
+name: Monitor Turismo Semanal
+
+on:
+  schedule:
+    - cron: '0 11 * * 1'  # Cada lunes a las 8am hora Chile
+  workflow_dispatch:        # También permite ejecutarlo manualmente
+
+jobs:
+  ejecutar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Instalar dependencias
+        run: pip install anthropic feedparser
+
+      - name: Ejecutar monitor
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          EMAIL_REMITENTE: ${{ secrets.EMAIL_REMITENTE }}
+          EMAIL_DESTINATARIO: ${{ secrets.EMAIL_DESTINATARIO }}
+          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+        run: python monitor_turismo.py
