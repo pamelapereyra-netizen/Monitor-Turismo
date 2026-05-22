@@ -2,8 +2,8 @@ name: Monitor Turismo Semanal
 
 on:
   schedule:
-    - cron: '0 11 * * 1'  # Cada lunes a las 8am hora Chile
-  workflow_dispatch:        # También permite ejecutarlo manualmente
+    - cron: '0 11 * * 1'  # Cada lunes 8am Chile
+  workflow_dispatch:        # Permite ejecutar manualmente
 
 jobs:
   ejecutar:
@@ -17,12 +17,16 @@ jobs:
           python-version: '3.11'
 
       - name: Instalar dependencias
-        run: pip install anthropic feedparser
+        run: pip install anthropic feedparser python-docx
 
       - name: Ejecutar monitor
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          EMAIL_REMITENTE: ${{ secrets.EMAIL_REMITENTE }}
-          EMAIL_DESTINATARIO: ${{ secrets.EMAIL_DESTINATARIO }}
-          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
         run: python monitor_turismo.py
+
+      - name: Subir archivo Word
+        uses: actions/upload-artifact@v4
+        with:
+          name: monitor-turismo-semanal
+          path: Monitor_Turismo_*.docx
+          retention-days: 30
